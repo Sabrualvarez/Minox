@@ -4,6 +4,27 @@ import pandas as pd
 from dotenv import load_dotenv
 
 
+def generate_sql(model, question: str, columns: list[str]) -> str:
+    """Ask Gemini to create a SQL query for the question."""
+    system = (
+        "Eres un asistente experto en SQL. "
+        "Genera solo la consulta SQL necesaria para responder a la pregunta "
+        "utilizando la tabla 'productos_minox' que contiene las columnas: "
+        f"{', '.join(columns)}."
+    )
+    response = model.generate_content([system, question])
+    return response.text.strip()
+
+
+def answer_with_rows(model, question: str, rows: list[dict]) -> str:
+    """Generate a final answer using the query results."""
+    prompt = (
+        "Responde a la pregunta solo con la siguiente informacion extraida de la base de datos:\n"
+        f"{rows}\nPregunta: {question}"
+    )
+    return model.generate_content(prompt).text.strip()
+
+
 def load_data(path: str) -> pd.DataFrame:
     """Load and clean the product spreadsheet."""
     df = pd.read_excel(path)
@@ -52,10 +73,22 @@ def main():
     df = load_data("todo_junto.xlsx")
     conn = setup_database(df)
     gemini = load_gemini()
+    columns = list(df.columns)
 
-    sql_gemini = gemini
-    chat = sql_gemini.start_chat(enable_automatic_function_calling=True)
-    print(chat.send_message("¿Cuál es el visor que menos pesa?").text)
+    while True:
+        question = input("Pregunta (salir para terminar): ").strip()
+        if question.lower() == "salir":
+            break
+
+        sql = generate_sql(gemini, question, columns)
+        try:
+            rows = sql_query(sql, conn)
+        except Exception as exc:
+            print(f"Error al ejecutar la consulta '{sql}': {exc}")
+            continue
+
+        answer = answer_with_rows(gemini, question, rows)
+        print(answer)
 
 
 if __name__ == "__main__":
