@@ -1,4 +1,5 @@
 import os
+import re
 import sqlite3
 import pandas as pd
 from dotenv import load_dotenv
@@ -13,7 +14,11 @@ def generate_sql(model, question: str, columns: list[str]) -> str:
         f"{', '.join(columns)}."
     )
     response = model.generate_content([system, question])
-    return response.text.strip()
+    text = response.text.strip()
+    # Remove ``` blocks or leading 'sql' markers that could cause syntax errors
+    text = re.sub(r"```(?:sql)?", "", text, flags=re.IGNORECASE)
+    text = text.replace("```", "").strip()
+    return text
 
 
 def answer_with_rows(model, question: str, rows: list[dict]) -> str:
